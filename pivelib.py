@@ -15,7 +15,6 @@ import sys
 import urllib3
 import xml.etree.ElementTree as ET
 import datetime
-import math
 import wiringpi2
 
 # ===========
@@ -224,45 +223,48 @@ for station in stations:
 # ==================================
 # Requête pour les prédictions météo
 # ==================================
-url_weather = ('http://api.wunderground.com/api/bc48fae29b73e75a/' +
-               'hourly/lang:FR/q/zmw:00000.98.07150.xml')
+url_weather = ('http://api.openweathermap.org/data/2.5/forecast' +
+               '?q=Paris,fr&mode=xml&lang=fr&units=metric')
 r = http.request('GET', url_weather)
 
 weather_now = ''
 temp_now = -1
-weather_5h = ''
-temp_5h = -1
-weather_10h = ''
-temp_10h = -1
+weather_3h = ''
+temp_3h = -1
+weather_6h = ''
+temp_6h = -1
+weather_9h = ''
+temp_9h = -1
 
 if r.status == 200:
     weather_xml = ET.fromstring(r.data)
 
     for child in weather_xml.iter('forecast'):
-        day = child.find('FCTTIME').find('mday')
+        for time in child.iter('time'):
+            time_from = datetime.datetime.strptime(time.attrib['from'],
+                                                   "%Y-%m-%dT%H:%M:%S")
+            time_to = datetime.datetime.strptime(time.attrib['to'],
+                                                 "%Y-%m-%dT%H:%M:%S")
 
-        # Garder uniquement les événements pour aujourd'hui et éventuellement
-        # demain
-        if (int(day.text) != int(now.strftime("%d")) and
-           int(day.text) != int(now.strftime("%d")) + 1):
-            continue
+            if time_to > now and time_from < now:
+                weather_now = time.find('clouds').attrib['value']
+                temp_now = time.find('temperature').attrib['value']
 
-        epoch = child.find('FCTTIME').find('epoch')
-        epoch = datetime.datetime.fromtimestamp(int(epoch.text))
+            if (time_to > now + datetime.timedelta(hours=3) and
+               time_from < now+datetime.timedelta(hours=3)):
+                weather_3h = time.find('clouds').attrib['value']
+                temp_3h = time.find('temperature').attrib['value']
 
-        # Météo maintenant
-        if (math.floor((epoch - now).seconds/3600) == 0 and
-           int(day.text) == int(now.strftime('%d'))):
-            weather_now = child.find('condition').text
-            temp_now = child.find('temp').find('metric').text
-        # Météo à 5h
-        elif math.floor((epoch - now).seconds/3600) == 5:
-            weather_5h = child.find('condition').text
-            temp_5h = child.find('temp').find('metric').text
-        # Météo à 10h
-        elif math.floor((epoch - now).seconds/3600) == 10:
-            weather_10h = child.find('condition').text
-            temp_10h = child.find('temp').find('metric').text
+            if (time_to > now+datetime.timedelta(hours=6) and
+               time_from < now+datetime.timedelta(hours=6)):
+                weather_6h = time.find('clouds').attrib['value']
+                temp_6h = time.find('temperature').attrib['value']
+
+            if (time_to > now+datetime.timedelta(hours=9) and
+               time_from < now+datetime.timedelta(hours=9)):
+                weather_9h = time.find('clouds').attrib['value']
+                temp_9h = time.find('temperature').attrib['value']
+
 
 # ============================
 # Afficher les infos à l'écran
