@@ -1,4 +1,5 @@
 #! /usr/bin/env python3.3
+#-*- coding: utf-8 -*-
 
 # Auteur : Phyks (phyks@phyks.me)
 # Site web : http://phyks.me
@@ -15,7 +16,10 @@ import sys
 import urllib3
 import xml.etree.ElementTree as ET
 import datetime
-import wiringpi2
+import wiringpi2 as wp2
+import time as time_lib
+
+wp2.wiringPiSetup()
 
 # ===========
 # Pins du LCD
@@ -27,8 +31,8 @@ PIN_DC = 5
 PIN_SDIN = 6
 PIN_SCLK = 7
 
-LCD_C = HIGH
-LCD_D = LOW
+LCD_C = 0
+LCD_D = 1
 LCD_X = 84
 LCD_Y = 48
 
@@ -134,16 +138,16 @@ ASCII = [
 
 
 def writeLCD(dc, data):
-    wiringpi2.digitalWrite(PIN_DC, dc)
-    wiringpi2.digitalWrite(PIN_SCE, LOW)
-    wiringpi2.shiftOut(PIN_SDIN, PIN_SCLK, MSBFIRST, data)
-    wiringpi2.digitalWrite(PIN_SCE, HIGH)
+    wp2.digitalWrite(PIN_DC, dc)
+    wp2.digitalWrite(PIN_SCE, 0)
+    wp2.shiftOut(PIN_SDIN, PIN_SCLK, 1, data)
+    wp2.digitalWrite(PIN_SCE, 1)
 
 
 def characterLCD(character):
     writeLCD(LCD_D, 0x00)
     for i in range(0, 5):
-        writeLCD(ASCII[character - 0x20][i])
+        writeLCD(LCD_D, ASCII[ord(character) - 0x20][i])
     writeLCD(LCD_D, 0x00)
 
 
@@ -153,25 +157,25 @@ def stringLCD(string):
 
 
 def initLCD():
-    wiringpi2.pinMode(PIN_SCE, OUTPUT)
-    wiringpi2.pinMode(PIN_RESET, OUTPUT)
-    wiringpi2.pinMode(PIN_DC, OUTPUT)
-    wiringpi2.pinMode(PIN_SDIN, OUTPUT)
-    wiringpi2.pinMode(PIN_SCLK, OUTPUT)
-    wiringpi2.digitalWrite(PIN_RESET, LOW)
-    wiringpi2.digitalWrite(PIN_RESET, HIGH)
+    wp2.pinMode(PIN_SCE, 1)
+    wp2.pinMode(PIN_RESET, 1)
+    wp2.pinMode(PIN_DC, 1)
+    wp2.pinMode(PIN_SDIN, 1)
+    wp2.pinMode(PIN_SCLK, 1)
+    wp2.digitalWrite(PIN_RESET, 0)
+    wp2.digitalWrite(PIN_RESET, 1)
 
-    wiringpi2.writeLCD(LCD_C, 0x21)  # LCD Extended commands
-    wiringpi2.writeLCD(LCD_C, 0x98)  # Set LCD Vop (contrast)
-    wiringpi2.writeLCD(LCD_C, 0x04)  # Set Temp coefficient
-    wiringpi2.writeLCD(LCD_C, 0x13)  # LCD bias mode (1:48)
-    wiringpi2.writeLCD(LCD_C, 0x0C)  # LCD in normal mode
-    wiringpi2.writeLCD(LCD_C, 0x20)
-    wiringpi2.writeLCD(LCD_C, 0x0C)
+    writeLCD(LCD_C, 0x21)  # LCD Extended commands
+    writeLCD(LCD_C, 0x98)  # Set LCD Vop (contrast)
+    writeLCD(LCD_C, 0x04)  # Set Temp coefficient
+    writeLCD(LCD_C, 0x13)  # LCD bias mode (1:48)
+    writeLCD(LCD_C, 0x0C)  # LCD in normal mode
+    writeLCD(LCD_C, 0x20)
+    writeLCD(LCD_C, 0x0C)
 
 
 def clearLCD():
-    for i in range(0, LCD_X*LCD_Y/8):
+    for i in range(0, int(LCD_X*LCD_Y/8)):
         writeLCD(LCD_D, 0x00)
     characterLCD(' ')
 
@@ -192,6 +196,9 @@ base_url = ('http://www.velib.paris.fr/service/stationdetails/paris/')
 # Initialisation des librairies
 # =============================
 http = urllib3.PoolManager()
+initLCD()
+clearLCD()
+stringLCD("Loading...")
 
 # ====
 # Date
@@ -270,7 +277,35 @@ if r.status == 200:
 # Afficher les infos à l'écran
 # ============================
 
-wiringpi2.wiringPiSetup
+for station in stations:
+    clearLCD()
+    stringLCD(str(station))
+    stringLCD("Available : "+str(available[station]))
+    stringLCD("Free : "+str(free[station]))
+    time_lib.sleep(2)
 
-initLCD()
+clearLCD()
+stringLCD("Weather now :")
+stringLCD(weather_now)
+stringLCD(str(temp_now)+"C")
+time_lib.sleep(2)
+
+clearLCD()
+stringLCD("Weather 3h :")
+stringLCD(weather_3h)
+stringLCD(str(temp_3h)+"C")
+time_lib.sleep(2)
+
+clearLCD()
+stringLCD("Weather 6h :")
+stringLCD(weather_6h)
+stringLCD(str(temp_6h)+"C")
+time_lib.sleep(2)
+
+clearLCD()
+stringLCD("Weather 9h :")
+stringLCD(weather_9h)
+stringLCD(str(temp_9h)+"C")
+time_lib.sleep(2)
+
 clearLCD()
