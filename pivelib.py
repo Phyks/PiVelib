@@ -18,6 +18,8 @@ import xml.etree.ElementTree as ET
 import datetime
 import wiringpi2 as wp2
 import time as time_lib
+import signal
+import threading
 
 wp2.wiringPiSetup()
 
@@ -155,11 +157,13 @@ def stringLCD(string):
     for character in string:
         characterLCD(character)
 
+
 # X ranges from 0 to 84
 # Y ranges from 0 to 5
 def gotoXYLCD(x, y):
-  writeLCD(0, 0x80 | x)
-  writeLCD(0, 0x40 | y)
+    writeLCD(0, 0x80 | x)
+    writeLCD(0, 0x40 | y)
+
 
 def initLCD():
     wp2.pinMode(PIN_SCE, 1)
@@ -184,12 +188,89 @@ def clearLCD():
         writeLCD(LCD_D, 0x00)
     characterLCD(' ')
 
+
+def kill_handler(signum, frame):
+    global running
+    global update_thread
+    print("Exiting...")
+    running = False
+    update_thread.cancel()
+
+
+def update():
+    print("Updating...")
+    global available
+    global free
+    global weather_now
+    global temp_now
+    global weather_3h
+    global temp_3h
+    global weather_6h
+    global temp_6h
+    global weather_9h
+    global temp_9h
+    global running
+
+    # =======================
+    # Requête sur l'API Vélib
+    # =======================
+    for station in stations:
+        r = http.request('GET', base_url+str(station))
+
+        if r.status == 200:
+            station_xml = ET.fromstring(r.data)
+
+        for child in station_xml.iter('available'):
+            available[station] = child.text
+        for child in station_xml.iter('free'):
+            free[station] = child.text
+
+        else:
+            available[station] = -1
+            free[station] = -1
+
+    # ==================================
+    # Requête pour les prédictions météo
+    # ==================================
+    url_weather = ('http://api.openweathermap.org/data/2.5/forecast' +
+                   '?q=Paris,fr&mode=xml&lang=fr&units=metric')
+    r = http.request('GET', url_weather)
+
+    if r.status == 200:
+        weather_xml = ET.fromstring(r.data)
+
+        for child in weather_xml.iter('forecast'):
+            for time in child.iter('time'):
+                time_from = datetime.datetime.strptime(time.attrib['from'],
+                                                       "%Y-%m-%dT%H:%M:%S")
+                time_to = datetime.datetime.strptime(time.attrib['to'],
+                                                     "%Y-%m-%dT%H:%M:%S")
+
+                if time_to > now and time_from < now:
+                    weather_now = time.find('clouds').attrib['value']
+                    temp_now = time.find('temperature').attrib['value']
+
+                if (time_to > now + datetime.timedelta(hours=3) and
+                   time_from < now+datetime.timedelta(hours=3)):
+                    weather_3h = time.find('clouds').attrib['value']
+                    temp_3h = time.find('temperature').attrib['value']
+
+                if (time_to > now+datetime.timedelta(hours=6) and
+                   time_from < now+datetime.timedelta(hours=6)):
+                    weather_6h = time.find('clouds').attrib['value']
+                    temp_6h = time.find('temperature').attrib['value']
+
+                if (time_to > now+datetime.timedelta(hours=9) and
+                   time_from < now+datetime.timedelta(hours=9)):
+                    weather_9h = time.find('clouds').attrib['value']
+                    temp_9h = time.find('temperature').attrib['value']
 # ==========
 # Paramètres
 # ==========
 
 if(len(sys.argv) == 1):
-    exit('Vous devez fournir au moins un numéro de station en argument.')
+    sys.exit('You must provide at least one station number as ' +
+             'argument on the command line.')
 
 stations = []
 for station in sys.argv[1:]:
@@ -203,8 +284,13 @@ base_url = ('http://www.velib.paris.fr/service/stationdetails/paris/')
 http = urllib3.PoolManager()
 initLCD()
 clearLCD()
-gotoXYLCD(0,0)
+gotoXYLCD(0, 0)
 stringLCD("Loading...")
+
+running = True
+update_thread = threading.Timer(900, update)
+update_thread.start()
+signal.signal(signal.SIGINT, kill_handler)
 
 # ====
 # Date
@@ -213,32 +299,11 @@ now = datetime.datetime.now()
 date = now.strftime('%d/%m/%Y')
 time = now.strftime('%H:%M')
 
-# =======================
-# Requête sur l'API Vélib
-# =======================
+# ====
+# Vars
+# ====
 available = {}
 free = {}
-for station in stations:
-    r = http.request('GET', base_url+str(station))
-
-    if r.status == 200:
-        station_xml = ET.fromstring(r.data)
-
-        for child in station_xml.iter('available'):
-            available[station] = child.text
-        for child in station_xml.iter('free'):
-            free[station] = child.text
-
-    else:
-        available[station] = -1
-        free[station] = -1
-
-# ==================================
-# Requête pour les prédictions météo
-# ==================================
-url_weather = ('http://api.openweathermap.org/data/2.5/forecast' +
-               '?q=Paris,fr&mode=xml&lang=fr&units=metric')
-r = http.request('GET', url_weather)
 
 weather_now = ''
 temp_now = -1
@@ -249,40 +314,12 @@ temp_6h = -1
 weather_9h = ''
 temp_9h = -1
 
-if r.status == 200:
-    weather_xml = ET.fromstring(r.data)
-
-    for child in weather_xml.iter('forecast'):
-        for time in child.iter('time'):
-            time_from = datetime.datetime.strptime(time.attrib['from'],
-                                                   "%Y-%m-%dT%H:%M:%S")
-            time_to = datetime.datetime.strptime(time.attrib['to'],
-                                                 "%Y-%m-%dT%H:%M:%S")
-
-            if time_to > now and time_from < now:
-                weather_now = time.find('clouds').attrib['value']
-                temp_now = time.find('temperature').attrib['value']
-
-            if (time_to > now + datetime.timedelta(hours=3) and
-               time_from < now+datetime.timedelta(hours=3)):
-                weather_3h = time.find('clouds').attrib['value']
-                temp_3h = time.find('temperature').attrib['value']
-
-            if (time_to > now+datetime.timedelta(hours=6) and
-               time_from < now+datetime.timedelta(hours=6)):
-                weather_6h = time.find('clouds').attrib['value']
-                temp_6h = time.find('temperature').attrib['value']
-
-            if (time_to > now+datetime.timedelta(hours=9) and
-               time_from < now+datetime.timedelta(hours=9)):
-                weather_9h = time.find('clouds').attrib['value']
-                temp_9h = time.find('temperature').attrib['value']
+update()
 
 
 # ============================
 # Afficher les infos à l'écran
 # ============================
-running = True
 while running:
     for station in stations:
         clearLCD()
@@ -296,6 +333,8 @@ while running:
         stringLCD("Free: "+str(free[station]))
         time_lib.sleep(2)
 
+    if running is False:
+        continue
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -304,9 +343,11 @@ while running:
     gotoXYLCD(0, 2)
     stringLCD(weather_now.capitalize())
     gotoXYLCD(0, 4)
-    stringLCD(str(temp_now)+"C")
+    stringLCD("Temp:"+str(temp_now)+"C")
     time_lib.sleep(2)
 
+    if running is False:
+        continue
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -315,9 +356,11 @@ while running:
     gotoXYLCD(0, 2)
     stringLCD(weather_3h.capitalize())
     gotoXYLCD(0, 4)
-    stringLCD(str(temp_3h)+"C")
+    stringLCD("Temp:"+str(temp_3h)+"C")
     time_lib.sleep(2)
 
+    if running is False:
+        continue
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -326,9 +369,11 @@ while running:
     gotoXYLCD(0, 2)
     stringLCD(weather_6h.capitalize())
     gotoXYLCD(0, 4)
-    stringLCD(str(temp_6h)+"C")
+    stringLCD("Temp:"+str(temp_6h)+"C")
     time_lib.sleep(2)
 
+    if running is False:
+        continue
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -337,7 +382,7 @@ while running:
     gotoXYLCD(0, 2)
     stringLCD(weather_9h.capitalize())
     gotoXYLCD(0, 4)
-    stringLCD(str(temp_9h)+"C")
+    stringLCD("Temp:"+str(temp_9h)+"C")
     time_lib.sleep(2)
 
 clearLCD()
