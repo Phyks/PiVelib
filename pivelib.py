@@ -295,7 +295,7 @@ while running:
         gotoXYLCD(0, 5)
         stringLCD("Free: "+str(free[station]))
         time_lib.sleep(2)
-    
+
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -306,7 +306,7 @@ while running:
     gotoXYLCD(0, 4)
     stringLCD(str(temp_now)+"C")
     time_lib.sleep(2)
-    
+
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -317,7 +317,7 @@ while running:
     gotoXYLCD(0, 4)
     stringLCD(str(temp_3h)+"C")
     time_lib.sleep(2)
-    
+
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
@@ -328,7 +328,7 @@ while running:
     gotoXYLCD(0, 4)
     stringLCD(str(temp_6h)+"C")
     time_lib.sleep(2)
-    
+
     clearLCD()
     gotoXYLCD(0, 0)
     stringLCD("[Weather]")
