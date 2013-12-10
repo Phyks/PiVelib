@@ -220,10 +220,10 @@ def update():
         if r.status == 200:
             station_xml = ET.fromstring(r.data)
 
-        for child in station_xml.iter('available'):
-            available[station] = child.text
-        for child in station_xml.iter('free'):
-            free[station] = child.text
+            for child in station_xml.iter('available'):
+                available[station] = child.text
+            for child in station_xml.iter('free'):
+                free[station] = child.text
 
         else:
             available[station] = -1
